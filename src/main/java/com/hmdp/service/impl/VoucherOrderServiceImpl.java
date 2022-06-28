@@ -47,6 +47,8 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
         Long userId = UserHolder.getUser().getId();
         // 先获取锁，再提交事务，最后再释放锁
+        // 还是有问题：再集群模式下还是并发安全问题，因为有多个jvm的存在，每个jvm都有自己的锁，导致每一锁又可以有一个线程获取
+        // 于是出现并行运行，那么就可能出现安全问题
         synchronized (userId.toString().intern()) {
             // 获取当前对象的代理对象
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();

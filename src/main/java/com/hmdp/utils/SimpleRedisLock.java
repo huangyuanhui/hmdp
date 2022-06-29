@@ -43,6 +43,10 @@ public class SimpleRedisLock implements ILock {
         // 获取线程标示
         String threadId = ID_PREFIX + Thread.currentThread().getId();
         String id = redisTemplate.opsForValue().get(KEY_PREFIX + name);
+        // 此方法还是有问题，因为从redis中获取锁标识去判断锁标识是否一致 与 释放锁不是原子操作，在极端情况下就会产生问题，
+        // 比如，线程一判断锁标识后，在执行释放锁的时候发生了阻塞，而阻塞的时候如果足够长，很有可能会触发锁的超时释放，锁一旦超时释放
+        // 那么此时别的线程又可以乘虚而入成功获取锁，而当线程二获取锁成功后，线程一阻塞结束醒来去执行释放锁的操作，于是就把线程二的锁释放掉了
+        //，此时线程三又可以乘虚而入获取锁，那么再一次发生线程安全问题
         if (threadId.equals(id)) {
             redisTemplate.delete(KEY_PREFIX + name);
         }

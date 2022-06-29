@@ -8,9 +8,11 @@ import com.hmdp.service.ISeckillVoucherService;
 import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +35,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired
     private RedisIdWorker redisIdWorker;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
@@ -46,18 +51,27 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("库存不足！");
         }
         Long userId = UserHolder.getUser().getId();
-        // 先获取锁，再提交事务，最后再释放锁
-        // 还是有问题：再集群模式下还是并发安全问题，因为有多个jvm的存在，每个jvm都有自己的锁，导致每一锁又可以有一个线程获取
-        // 于是出现并行运行，那么就可能出现安全问题
-        synchronized (userId.toString().intern()) {
+
+        // 创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, redisTemplate);
+        //锁超时时间一般是业务执行时间的10倍
+        boolean isLock = lock.tryLock(1200L);
+        if (!isLock) {
+            // 获取锁失败，应该按业务返回错误或者重试，此处返回失败，因为为获取成功，说明该用户在别的线程中获取锁了
+            return Result.fail("一个人只允许下一单，不允许重复下单！");
+        }
+        try {
             // 获取当前对象的代理对象
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
+        } finally {
+            lock.unLock();
         }
     }
 
     /**
      * 创建订单
+     *
      * @param voucherId
      * @return
      */

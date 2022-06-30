@@ -10,6 +10,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.RedisIdWorker;
 import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.aop.framework.AopContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,6 +40,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Autowired
     private StringRedisTemplate redisTemplate;
 
+    @Autowired
+    private RedissonClient redissonClient;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         SeckillVoucher seckillVoucher = seckillVoucherService.getById(voucherId);
@@ -53,9 +58,11 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         Long userId = UserHolder.getUser().getId();
 
         // 创建锁对象
-        SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, redisTemplate);
+        // SimpleRedisLock lock = new SimpleRedisLock("order:" + userId, redisTemplate);
+
+        RLock lock = redissonClient.getLock("lock:order:" + userId);
         //锁超时时间一般是业务执行时间的10倍
-        boolean isLock = lock.tryLock(1200L);
+        boolean isLock = lock.tryLock();  // 无参表示不重试 超时时间默认
         if (!isLock) {
             // 获取锁失败，应该按业务返回错误或者重试，此处返回失败，因为为获取成功，说明该用户在别的线程中获取锁了
             return Result.fail("一个人只允许下一单，不允许重复下单！");
@@ -65,7 +72,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
             return proxy.createVoucherOrder(voucherId);
         } finally {
-            lock.unLock();
+            lock.unlock();
         }
     }
 

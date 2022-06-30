@@ -54,7 +54,7 @@ public class SimpleRedisLock implements ILock {
     }
 
     @Override
-    public void unLock() {
+    public void unlock() {
         // 调用lua脚本释放锁
         redisTemplate.execute(
                 unlockScript,
@@ -66,7 +66,7 @@ public class SimpleRedisLock implements ILock {
 
     /*
     @Override
-    public void unLock() {
+    public void unlock() {
         // 获取线程标示
         String threadId = ID_PREFIX + Thread.currentThread().getId();
         String id = redisTemplate.opsForValue().get(KEY_PREFIX + name);

@@ -1,8 +1,11 @@
 package com.hmdp.utils;
 
 import cn.hutool.core.lang.UUID;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,6 +30,18 @@ public class SimpleRedisLock implements ILock {
      */
     private static final String ID_PREFIX = UUID.randomUUID().toString(true) + "-";
 
+    /**
+     * 释放锁lua脚本
+     */
+    private static final DefaultRedisScript<Long> unlockScript;
+
+    static {
+        unlockScript = new DefaultRedisScript<>();
+        unlockScript.setLocation(new ClassPathResource("unlock.lua"));
+        unlockScript.setResultType(Long.class);
+    }
+
+
     @Override
     public boolean tryLock(long expireSec) {
         // 获取线程标示，（问题：线程id在jvm中是递增的，但是多个jvm中线程标识可能会一样的情况）
@@ -40,6 +55,18 @@ public class SimpleRedisLock implements ILock {
 
     @Override
     public void unLock() {
+        // 调用lua脚本释放锁
+        redisTemplate.execute(
+                unlockScript,
+                Collections.singletonList(KEY_PREFIX + name),
+                ID_PREFIX + Thread.currentThread().getId()
+        );
+    }
+
+
+    /*
+    @Override
+    public void unLock() {
         // 获取线程标示
         String threadId = ID_PREFIX + Thread.currentThread().getId();
         String id = redisTemplate.opsForValue().get(KEY_PREFIX + name);
@@ -51,4 +78,5 @@ public class SimpleRedisLock implements ILock {
             redisTemplate.delete(KEY_PREFIX + name);
         }
     }
+    */
 }

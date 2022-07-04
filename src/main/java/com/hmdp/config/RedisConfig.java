@@ -25,7 +25,7 @@ public class RedisConfig {
      * ,redisson实现重入锁可以利用hash数据接购，key为锁的名称，field1的值记录获取锁的线程标识，filed2的值记录重入次数，
      *
      *
-     * redisson实现重入锁的数据接购：
+     * redisson实现重入锁的数据接购hash：
      *                  value
      *  key
      *            field       value

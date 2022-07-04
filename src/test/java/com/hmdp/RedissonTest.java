@@ -55,6 +55,16 @@ public class RedissonTest {
             log.error("获取锁失败。。。。1");
             return;
         }
+        /**
+         * 获取锁成功之后，会调用scheduleExpirationRenewal(threadId)自动更新续期的方法，确保线程获取锁成功之后，
+         * 锁不会因为超时而释放，从而引发线程安全问题。该方法能确保锁是因为业务执行完（即调用lock.unlock()）才释放，
+         * 而不会因为阻塞时间超时释放！
+         * 原理就是，在获取锁成功之后，renewExpiration()方法里开启一个延时（锁释放时间  / 3）任务去重置锁的超时释放时间，
+         * 然后继续递归调用renewExpiration()方法去重置所得超时释放时间！
+         *
+         * 释放锁时，会调用 cancelExpirationRenewal(threadId)方法取消自动续期
+         */
+
         try {
             log.info("获取锁成功。。。。1");
             method2();
